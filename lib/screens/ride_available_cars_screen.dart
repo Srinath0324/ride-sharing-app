@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:provider/provider.dart';
 import '../constants/app_routes.dart';
 import '../constants/app_theme.dart';
 import '../widgets/location_button.dart';
 import '../widgets/map_widget.dart';
 import '../services/map_service.dart';
+import '../providers/wallet_provider.dart';
 
 class RideAvailableCarsScreen extends StatefulWidget {
   const RideAvailableCarsScreen({super.key});
@@ -18,6 +20,8 @@ class _RideAvailableCarsScreenState extends State<RideAvailableCarsScreen> {
   int _selectedDriverIndex = -1;
   bool _showRideInfoSheet = false;
   bool _showBookingSuccessDialog = false;
+  bool _showPaymentSheet = false;
+  String _selectedPaymentMethod = 'cash'; // 'cash' or 'wallet'
   MapboxMap? _mapboxMap;
 
   // Mock data for drivers
@@ -67,8 +71,49 @@ class _RideAvailableCarsScreenState extends State<RideAvailableCarsScreen> {
   void _confirmRide() {
     setState(() {
       _showRideInfoSheet = false;
-      _showBookingSuccessDialog = true;
+      _showPaymentSheet = true;
     });
+  }
+
+  void _processPayment() {
+    final walletProvider = Provider.of<WalletProvider>(context, listen: false);
+
+    setState(() {
+      _showPaymentSheet = false;
+    });
+
+    if (_selectedPaymentMethod == 'wallet') {
+      // Get ride price - remove the $ and convert to int
+      final priceText =
+          _availableDrivers[_selectedDriverIndex]['price'] as String;
+      final price = int.parse(priceText.replaceAll(RegExp(r'[^\d]'), ''));
+
+      // Try to deduct money from wallet
+      bool success = walletProvider.deductMoney(
+        price,
+        'Ride with ${_availableDrivers[_selectedDriverIndex]['name']}',
+      );
+
+      if (success) {
+        // Show success dialog
+        setState(() {
+          _showBookingSuccessDialog = true;
+        });
+      } else {
+        // Show low balance error
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Insufficient balance in wallet!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } else {
+      // Cash payment doesn't need processing, just show success
+      setState(() {
+        _showBookingSuccessDialog = true;
+      });
+    }
   }
 
   void _goToTracking() {
@@ -91,11 +136,10 @@ class _RideAvailableCarsScreenState extends State<RideAvailableCarsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, String>? routeData =
-        ModalRoute.of(context)?.settings.arguments as Map<String, String>?;
-    final String from = routeData?['from'] ?? 'From location';
-    final String to = routeData?['to'] ?? 'To location';
-    final size = MediaQuery.of(context).size;
+    final Map<String, Object?>? routeData =
+        ModalRoute.of(context)?.settings.arguments as Map<String, Object?>?;
+    final String from = routeData?['from']?.toString() ?? 'From location';
+    final String to = routeData?['to']?.toString() ?? 'To location';
 
     return Scaffold(
       body: Stack(
@@ -246,7 +290,7 @@ class _RideAvailableCarsScreenState extends State<RideAvailableCarsScreen> {
                                             30,
                                           ),
                                           child: Image.asset(
-                                            'assets/person.png',
+                                            'assets/icons/person.png',
                                             width: 60,
                                             height: 60,
                                             fit: BoxFit.cover,
@@ -445,7 +489,7 @@ class _RideAvailableCarsScreenState extends State<RideAvailableCarsScreen> {
                                             left: 8,
                                           ),
                                           child: Image.asset(
-                                            'assets/Suv car.png',
+                                            'assets/images/Suv car.png',
                                             width: 60,
                                             height: 40,
                                             fit: BoxFit.contain,
@@ -573,25 +617,316 @@ class _RideAvailableCarsScreenState extends State<RideAvailableCarsScreen> {
                 MediaQuery.of(context).size.height *
                 0.70, // Adjusted dynamically
             right: 20, // Positioned towards the left side
-            child: LocationButton(
-              size: 45,
-              iconSize: 22,
-            
-            ),
+            child: LocationButton(size: 45, iconSize: 22),
           ),
           // Booking Success Dialog
           if (_showBookingSuccessDialog) _buildBookingSuccessDialog(),
         ],
       ),
-      // Show ride information as bottom sheet
+      // Show appropriate bottom sheet
       bottomSheet:
-          _showRideInfoSheet
+          _showPaymentSheet
+              ? _buildPaymentMethodSheet()
+              : _showRideInfoSheet
               ? _buildRideInformationBottomSheet(
                 _availableDrivers[_selectedDriverIndex],
                 from,
                 to,
               )
               : null,
+    );
+  }
+
+  Widget _buildPaymentMethodSheet() {
+    // Access wallet provider to get current balance
+    final walletProvider = Provider.of<WalletProvider>(context);
+    final walletBalance = walletProvider.balance;
+
+    // Get ride price for display
+    final priceText =
+        _availableDrivers[_selectedDriverIndex]['price'] as String;
+    final price = int.parse(priceText.replaceAll(RegExp(r'[^\d]'), ''));
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 10,
+            offset: Offset(0, -5),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Payment Method',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _showPaymentSheet = false;
+                    _showRideInfoSheet = true; // Go back to ride info
+                  });
+                },
+                child: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Payment methods
+          const Text(
+            'Select Payment Method',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 16),
+
+          // Cash option
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedPaymentMethod = 'cash';
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color:
+                    _selectedPaymentMethod == 'cash'
+                        ? AppTheme.primaryColor.withOpacity(0.1)
+                        : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color:
+                      _selectedPaymentMethod == 'cash'
+                          ? AppTheme.primaryColor
+                          : Colors.grey.shade300,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.money, color: Colors.green),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cash Payment',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'Pay with cash on pickup',
+                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_selectedPaymentMethod == 'cash')
+                    const Icon(Icons.check_circle, color: Colors.green),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Wallet option
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedPaymentMethod = 'wallet';
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color:
+                    _selectedPaymentMethod == 'wallet'
+                        ? AppTheme.primaryColor.withOpacity(0.1)
+                        : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color:
+                      _selectedPaymentMethod == 'wallet'
+                          ? AppTheme.primaryColor
+                          : Colors.grey.shade300,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.account_balance_wallet,
+                      color: Colors.blue,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Wallet Payment',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Text(
+                              'Balance: ',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                            Image.asset(
+                              'assets/icons/coin.png',
+                              width: 16,
+                              height: 16,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Icon(
+                                  Icons.monetization_on,
+                                  color: Colors.amber,
+                                  size: 16,
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$walletBalance',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color:
+                                    walletBalance < price
+                                        ? Colors.red
+                                        : Colors.green,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_selectedPaymentMethod == 'wallet')
+                    const Icon(Icons.check_circle, color: Colors.green),
+                ],
+              ),
+            ),
+          ),
+
+          if (_selectedPaymentMethod == 'wallet') ...[
+            const SizedBox(height: 16),
+            // Show price info
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Ride cost:',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
+                  Row(
+                    children: [
+                      Image.asset(
+                        'assets/icons/coin.png',
+                        width: 20,
+                        height: 20,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.monetization_on,
+                            color: Colors.amber,
+                            size: 20,
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$price',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (walletBalance < price) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Insufficient balance! Please add money to your wallet or select cash payment.',
+                style: TextStyle(color: Colors.red, fontSize: 14),
+              ),
+            ],
+          ],
+
+          const SizedBox(height: 24),
+
+          // Pay button
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: _processPayment,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(50),
+                ),
+              ),
+              child: Text(
+                _selectedPaymentMethod == 'wallet'
+                    ? 'Pay with Wallet'
+                    : 'Pay with Cash',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -647,7 +982,7 @@ class _RideAvailableCarsScreenState extends State<RideAvailableCarsScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(50),
                   child: Image.asset(
-                    'assets/person.png',
+                    'assets/icons/person.png',
                     width: 100,
                     height: 100,
                     fit: BoxFit.cover,

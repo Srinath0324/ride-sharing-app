@@ -5,12 +5,14 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'constants/app_routes.dart';
 import 'constants/app_theme.dart';
 import 'providers/auth_provider.dart';
+import 'providers/location_provider.dart';
+import 'providers/wallet_provider.dart';
+import 'providers/ride_provider.dart';
 import 'services/map_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
-import 'screens/verification_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/ride_history_screen.dart';
@@ -20,6 +22,8 @@ import 'screens/ride_available_cars_screen.dart';
 import 'screens/ride_information_screen.dart';
 import 'screens/booking_success_screen.dart';
 import 'screens/tracking_screen.dart';
+import 'screens/wallet_screen.dart';
+import 'screens/fare_negotiation_screen.dart';
 
 // Flag to control Firebase initialization
 bool useFirebase = false;
@@ -56,7 +60,12 @@ class RydeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => AuthProvider())],
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => LocationProvider()),
+        ChangeNotifierProvider(create: (_) => WalletProvider()),
+        ChangeNotifierProvider(create: (_) => RideProvider()),
+      ],
       child: MaterialApp(
         title: 'Ryde',
         theme: AppTheme.getTheme(),
@@ -67,7 +76,6 @@ class RydeApp extends StatelessWidget {
           AppRoutes.onboarding: (context) => const OnboardingScreen(),
           AppRoutes.login: (context) => const LoginScreen(),
           AppRoutes.signup: (context) => const SignupScreen(),
-          AppRoutes.verification: (context) => const VerificationScreen(),
           AppRoutes.home: (context) => const HomeScreen(),
           AppRoutes.profile: (context) => const ProfileScreen(),
           AppRoutes.rideHistory: (context) => const RideHistoryScreen(),
@@ -78,6 +86,8 @@ class RydeApp extends StatelessWidget {
           AppRoutes.rideInformation: (context) => const RideInformationScreen(),
           AppRoutes.bookingSuccess: (context) => const BookingSuccessScreen(),
           AppRoutes.tracking: (context) => const TrackingScreen(),
+          AppRoutes.wallet: (context) => const WalletScreen(),
+          AppRoutes.fareNegotiation: (context) => const FareNegotiationScreen(),
         },
       ),
     );

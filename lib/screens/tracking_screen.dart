@@ -431,7 +431,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(30),
                               child: Image.asset(
-                                'assets/person.png',
+                                'assets/icons/profile.png',
                                 width: 60,
                                 height: 60,
                                 fit: BoxFit.cover,

@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../models/user_model.dart';
 import '../constants/app_constants.dart';
 import '../main.dart'; // Import to access the useFirebase flag
+import 'package:flutter/foundation.dart';
 
 enum AuthStatus { uninitialized, authenticated, unauthenticated }
 
@@ -15,18 +16,23 @@ class AuthProvider with ChangeNotifier {
   String? _errorMessage;
   bool _isLoading = false;
 
+  // Mock user for testing
+  UserModel? _currentUser;
+
   // Getters
   AuthStatus get authStatus => _authStatus;
   UserModel? get user => _user;
   String? get errorMessage => _errorMessage;
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _authStatus == AuthStatus.authenticated;
+  UserModel? get currentUser => _currentUser;
 
   AuthProvider() {
     if (useFirebase) {
       _authService = AuthService();
     }
     _initAuthStatus();
+    _initMockUser();
   }
 
   // Initialize auth status
@@ -291,5 +297,16 @@ class AuthProvider with ChangeNotifier {
         _errorMessage = error.message ?? 'An error occurred. Please try again.';
     }
     notifyListeners();
+  }
+
+  void _initMockUser() {
+    _currentUser = UserModel(
+      id: 'user1',
+      name: 'John Doe',
+      email: 'john.doe@example.com',
+      phoneNumber: '+91 98765 43210',
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
   }
 }

@@ -67,7 +67,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(50),
                           child: Image.asset(
-                            'assets/person.png',
+                            'assets/icons/profile.png',
                             width: 80,
                             height: 80,
                             fit: BoxFit.cover,
@@ -158,10 +158,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
       bottomNavigationBar: BottomNavBar(
-        currentIndex: _currentNavIndex,
+        currentIndex: 4,
         onTap: (index) {
-          if (index == _currentNavIndex) {
-            return; // Already on this tab
+          if (index == 4) {
+            return; // Already on profile tab
           }
 
           // Navigate to the selected screen
@@ -173,16 +173,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Navigator.pushReplacementNamed(context, AppRoutes.rideHistory);
               break;
             case 2:
-              Navigator.pushReplacementNamed(context, AppRoutes.chat);
+              Navigator.pushReplacementNamed(context, AppRoutes.wallet);
               break;
             case 3:
-              // Already on profile screen
+              Navigator.pushReplacementNamed(context, AppRoutes.chat);
               break;
           }
 
           // Update the index after navigation
           setState(() {
-            _currentNavIndex = index;
+            _currentNavIndex = 4; // Update to match current index
           });
         },
       ),

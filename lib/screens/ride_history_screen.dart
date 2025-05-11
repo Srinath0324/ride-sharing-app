@@ -107,7 +107,7 @@ class _RideHistoryScreenState extends State<RideHistoryScreen> {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child: Image.asset(
-                              'assets/Map.png',
+                              'assets/icons/map.png',
                               width: 80,
                               height: 80,
                               fit: BoxFit.cover,
@@ -305,9 +305,12 @@ class _RideHistoryScreenState extends State<RideHistoryScreen> {
               // Already on history screen
               break;
             case 2:
-              Navigator.pushReplacementNamed(context, AppRoutes.chat);
+              Navigator.pushReplacementNamed(context, AppRoutes.wallet);
               break;
             case 3:
+              Navigator.pushReplacementNamed(context, AppRoutes.chat);
+              break;
+            case 4:
               Navigator.pushReplacementNamed(context, AppRoutes.profile);
               break;
           }

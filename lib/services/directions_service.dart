@@ -44,6 +44,42 @@ class DirectionsService {
     }
   }
 
+  /// Get directions between coordinates with detailed response
+  static Future<Map<String, dynamic>> getDirections(
+    num startLng,
+    num startLat,
+    num endLng,
+    num endLat,
+  ) async {
+    if (_accessToken == null) {
+      throw Exception('Mapbox access token not found');
+    }
+
+    final coordinates = '$startLng,$startLat;$endLng,$endLat';
+    final url =
+        '$_endpoint/$coordinates?geometries=geojson&overview=full&access_token=$_accessToken';
+
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      if (data['routes'] != null && data['routes'].isNotEmpty) {
+        final route = data['routes'][0];
+
+        return {
+          'routes': data['routes'],
+          'geometry': route['geometry'],
+          'duration': route['duration'], // in seconds
+          'distance': route['distance'], // in meters
+        };
+      } else {
+        throw Exception('No route found between the coordinates');
+      }
+    } else {
+      throw Exception('Failed to get directions: ${response.statusCode}');
+    }
+  }
+
   /// Draw a route on the map
   static Future<String> drawRoute(
     MapboxMap mapboxMap,
@@ -52,26 +88,48 @@ class DirectionsService {
     // Generate unique source and layer IDs
     final String sourceId =
         'route-source-${DateTime.now().millisecondsSinceEpoch}';
-    final String layerId =
-        'route-layer-${DateTime.now().millisecondsSinceEpoch}';
+    final String routeLayerId = '$sourceId-route';
+    final String casingLayerId = '$sourceId-casing';
 
     // Create a GeoJSON source with the route geometry
     final geojson = {'type': 'Feature', 'properties': {}, 'geometry': geometry};
 
     try {
+      // Remove old route layers if they exist
+      try {
+        // We're simplifying by just attempting to remove common layer IDs
+        // This approach avoids the need to iterate through arrays that might have null issues
+        await mapboxMap.style.removeStyleLayer('route-layer');
+        await mapboxMap.style.removeStyleLayer('casing-layer');
+        await mapboxMap.style.removeStyleSource('route-source');
+      } catch (e) {
+        // Ignore errors if layers don't exist
+      }
+
       // Add source
       await mapboxMap.style.addSource(
         GeoJsonSource(id: sourceId, data: jsonEncode(geojson)),
       );
 
-      // Add line layer
+      // Add casing layer first (this creates the outline/border of the route)
       await mapboxMap.style.addLayer(
         LineLayer(
-          id: layerId,
+          id: casingLayerId,
+          sourceId: sourceId,
+          lineColor: Colors.blue.shade800.value,
+          lineWidth: 8.0,
+          lineOpacity: 0.7,
+        ),
+      );
+
+      // Add main route layer on top
+      await mapboxMap.style.addLayer(
+        LineLayer(
+          id: routeLayerId,
           sourceId: sourceId,
           lineColor: Colors.blue.value,
-          lineWidth: 5.0,
-          lineOpacity: 0.7,
+          lineWidth: 4.0,
+          lineOpacity: 0.9,
         ),
       );
 

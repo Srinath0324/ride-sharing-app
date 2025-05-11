@@ -8,6 +8,7 @@ class AppRoutes {
   static const String profile = '/profile';
   static const String rideHistory = '/history';
   static const String chat = '/chat';
+  static const String wallet = '/wallet';
   static const String bookRide = '/book-ride';
   static const String rideNearby = '/ride-nearby';
   static const String rideLocationRadius = '/ride-location-radius';
@@ -15,4 +16,5 @@ class AppRoutes {
   static const String rideInformation = '/ride-information';
   static const String bookingSuccess = '/booking-success';
   static const String tracking = '/tracking';
+  static const String fareNegotiation = '/fare-negotiation';
 }

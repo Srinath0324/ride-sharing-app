@@ -1,105 +1,102 @@
 import 'package:flutter/material.dart';
-import '../constants/app_theme.dart';
 
-enum ButtonType { primary, secondary, outlined }
+enum ButtonBgVariant { primary, secondary, danger, success, outline , white}
+enum ButtonTextVariant { primary, secondary, danger, success, defaultText }
 
 class CustomButton extends StatelessWidget {
-  final String text;
   final VoidCallback onPressed;
-  final ButtonType type;
-  final bool isLoading;
-  final bool isFullWidth;
-  final double height;
-  final IconData? icon;
-  final double borderRadius;
+  final String title;
+  final ButtonBgVariant bgVariant;
+  final ButtonTextVariant textVariant;
+  final Widget? iconLeft;
+  final Widget? iconRight;
+  final EdgeInsets? padding;
 
   const CustomButton({
     super.key,
-    required this.text,
     required this.onPressed,
-    this.type = ButtonType.primary,
-    this.isLoading = false,
-    this.isFullWidth = true,
-    this.height = 50,
-    this.icon,
-    this.borderRadius = 12,
+    required this.title,
+    this.bgVariant = ButtonBgVariant.primary,
+    this.textVariant = ButtonTextVariant.defaultText,
+    this.iconLeft,
+    this.iconRight,
+    this.padding,
   });
+
+  Color _getBgColor() {
+    switch (bgVariant) {
+      case ButtonBgVariant.secondary:
+        return Colors.grey;
+      case ButtonBgVariant.danger:
+        return Colors.red;
+      case ButtonBgVariant.success:
+        return Colors.green;
+      case ButtonBgVariant.outline:
+        return Colors.transparent;
+      case ButtonBgVariant.white:
+        return Colors.white;
+      default:
+        return const Color(0xFF0091FF); // default
+    }
+  }
+
+  Color _getTextColor() {
+    switch (textVariant) {
+      case ButtonTextVariant.primary:
+        return Colors.black;
+      case ButtonTextVariant.secondary:
+        return Colors.grey.shade100;
+      case ButtonTextVariant.danger:
+        return Colors.red.shade100;
+      case ButtonTextVariant.success:
+        return Colors.green.shade100;
+      default:
+        return Colors.white;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: isFullWidth ? double.infinity : null,
-      height: height,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: _getButtonStyle(),
-        child: _buildButtonContent(),
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: _getBgColor(),
+        borderRadius: BorderRadius.circular(100),
+        border: bgVariant == ButtonBgVariant.outline
+            ? Border.all(color: Colors.grey.shade300, width: 0.5)
+            : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.3),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          padding: padding ?? const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(100),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (iconLeft != null) iconLeft!,
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: _getTextColor(),
+              ),
+            ),
+            if (iconRight != null) iconRight!,
+          ],
+        ),
       ),
     );
-  }
-
-  Widget _buildButtonContent() {
-    if (isLoading) {
-      return const CircularProgressIndicator(
-        color: Colors.white,
-        strokeWidth: 2,
-      );
-    }
-
-    if (icon != null) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(width: 8),
-          Text(text, style: _getTextStyle()),
-        ],
-      );
-    }
-
-    return Text(text, style: _getTextStyle());
-  }
-
-  ButtonStyle _getButtonStyle() {
-    switch (type) {
-      case ButtonType.primary:
-        return ElevatedButton.styleFrom(
-          backgroundColor: AppTheme.primaryColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(borderRadius),
-          ),
-          elevation: 0,
-        );
-      case ButtonType.secondary:
-        return ElevatedButton.styleFrom(
-          backgroundColor: AppTheme.accentColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(borderRadius),
-          ),
-          elevation: 0,
-        );
-      case ButtonType.outlined:
-        return ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          foregroundColor: AppTheme.primaryColor,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(borderRadius),
-            side: const BorderSide(color: AppTheme.primaryColor),
-          ),
-        );
-    }
-  }
-
-  TextStyle _getTextStyle() {
-    final baseStyle = TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
-
-    switch (type) {
-      case ButtonType.primary:
-      case ButtonType.secondary:
-        return baseStyle.copyWith(color: Colors.white);
-      case ButtonType.outlined:
-        return baseStyle.copyWith(color: AppTheme.primaryColor);
-    }
   }
 }

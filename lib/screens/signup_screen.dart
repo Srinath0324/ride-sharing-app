@@ -151,7 +151,7 @@ class _SignupScreenState extends State<SignupScreen> {
           SizedBox(
             width: size.width,
             height: MediaQuery.of(context).size.height * 0.4,
-            child: Image.asset('assets/IMG.png', fit: BoxFit.cover),
+            child: Image.asset('assets/images/get-started.png', fit: BoxFit.cover),
           ),
 
           // Content overlay
@@ -420,7 +420,7 @@ class _SignupScreenState extends State<SignupScreen> {
                               ),
                             ),
                             icon: Image.asset(
-                              'assets/google_logo.png',
+                              'assets/icons/google.png',
                               width: 24,
                               height: 24,
                             ),

@@ -230,7 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(12),
                                   child: Image.asset(
-                                    'assets/Map.png',
+                                    'assets/images/Map.png',
                                     width: 80,
                                     height: 80,
                                     fit: BoxFit.cover,
@@ -433,9 +433,12 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.pushReplacementNamed(context, AppRoutes.rideHistory);
               break;
             case 2:
-              Navigator.pushReplacementNamed(context, AppRoutes.chat);
+              Navigator.pushReplacementNamed(context, AppRoutes.wallet);
               break;
             case 3:
+              Navigator.pushReplacementNamed(context, AppRoutes.chat);
+              break;
+            case 4:
               Navigator.pushReplacementNamed(context, AppRoutes.profile);
               break;
           }

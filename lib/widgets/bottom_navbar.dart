@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/app_theme.dart';
+import '../constants/app_routes.dart';
 
 class BottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -89,11 +90,11 @@ class BottomNavBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  Icons.chat_bubble,
+                  Icons.account_balance_wallet,
                   color: currentIndex == 2 ? Colors.white : Colors.grey,
                 ),
               ),
-              label: 'Chat',
+              label: 'Wallet',
             ),
             BottomNavigationBarItem(
               icon: Container(
@@ -106,8 +107,25 @@ class BottomNavBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  Icons.person,
+                  Icons.chat_bubble,
                   color: currentIndex == 3 ? Colors.white : Colors.grey,
+                ),
+              ),
+              label: 'Chat',
+            ),
+            BottomNavigationBarItem(
+              icon: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color:
+                      currentIndex == 4
+                          ? AppTheme.primaryColor
+                          : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.person,
+                  color: currentIndex == 4 ? Colors.white : Colors.grey,
                 ),
               ),
               label: 'Profile',

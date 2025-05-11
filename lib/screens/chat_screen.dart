@@ -11,7 +11,7 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  int _currentNavIndex = 2;
+  int _currentNavIndex = 3;
   final TextEditingController _messageController = TextEditingController();
   bool _showConversation = false;
   final List<Map<String, dynamic>> _messages = [];
@@ -164,9 +164,12 @@ class _ChatScreenState extends State<ChatScreen> {
               Navigator.pushReplacementNamed(context, AppRoutes.rideHistory);
               break;
             case 2:
-              // Already on chat screen
+              Navigator.pushReplacementNamed(context, AppRoutes.wallet);
               break;
             case 3:
+              // Already on chat screen
+              break;
+            case 4:
               Navigator.pushReplacementNamed(context, AppRoutes.profile);
               break;
           }
@@ -187,7 +190,7 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           // Empty message bubble image
           Image.asset(
-            'assets/message.png',
+            'assets/images/message.png',
             width: 150,
             height: 150,
             fit: BoxFit.contain,

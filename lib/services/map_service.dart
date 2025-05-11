@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -8,6 +9,7 @@ class MapService {
   static final MapService _instance = MapService._internal();
   static String? _accessToken;
   static String? _styleUrl;
+  static bool _hasLocationPermission = false;
 
   factory MapService() {
     return _instance;
@@ -37,6 +39,12 @@ class MapService {
 
   static String? get accessToken => _accessToken;
 
+  static void setLocationPermissionStatus(bool hasPermission) {
+    _hasLocationPermission = hasPermission;
+  }
+
+  static bool get hasLocationPermission => _hasLocationPermission;
+
   // Request location permission and return position
   static Future<geo.Position> getCurrentLocation() async {
     bool serviceEnabled;
@@ -64,6 +72,9 @@ class MapService {
         'Location permissions are permanently denied, we cannot request permissions.',
       );
     }
+
+    // Update permission status
+    _hasLocationPermission = true;
 
     // When we reach here, permissions are granted and we can continue
     return await geo.Geolocator.getCurrentPosition();
@@ -122,6 +133,92 @@ class MapService {
     );
   }
 
+  // Add a custom location marker to the map
+  static Future<String?> addLocationMarker({
+    required MapboxMap mapboxMap,
+    required Position position,
+    required Color color,
+    String? markerId,
+    String? markerName,
+    bool animate = false,
+  }) async {
+    try {
+      // Generate a unique marker ID if not provided
+      final String pointId =
+          markerId ?? 'marker-${DateTime.now().millisecondsSinceEpoch}';
+
+      // Create GeoJSON for the marker
+      final pointData = {
+        'type': 'Feature',
+        'properties': {'name': markerName ?? pointId},
+        'geometry': {
+          'type': 'Point',
+          'coordinates': [position.lng, position.lat],
+        },
+      };
+
+      // Try to remove the marker if it already exists
+      try {
+        if (await mapboxMap.style.styleLayerExists('${pointId}-circle')) {
+          await mapboxMap.style.removeStyleLayer('${pointId}-circle');
+        }
+        // Try to remove source even if we don't know if it exists
+        await mapboxMap.style.removeStyleSource(pointId);
+      } catch (e) {
+        // Ignore errors if the marker doesn't exist yet
+      }
+
+      // Add source for the marker
+      await mapboxMap.style.addSource(
+        GeoJsonSource(id: pointId, data: jsonEncode(pointData)),
+      );
+
+      // Add the marker layer as a circle
+      await mapboxMap.style.addLayer(
+        CircleLayer(
+          id: '${pointId}-circle',
+          sourceId: pointId,
+          circleColor: color.value,
+          circleRadius: 12.0,
+          circleStrokeColor: Colors.white.value,
+          circleStrokeWidth: 3.0,
+        ),
+      );
+
+      // Animate camera to marker position if requested
+      if (animate) {
+        await mapboxMap.flyTo(
+          CameraOptions(center: Point(coordinates: position), zoom: 15.0),
+          MapAnimationOptions(duration: 1000, startDelay: 0),
+        );
+      }
+
+      return pointId;
+    } catch (e) {
+      debugPrint('Error adding marker: $e');
+      return null;
+    }
+  }
+
+  // Remove a marker from the map
+  static Future<bool> removeMarker(MapboxMap mapboxMap, String markerId) async {
+    try {
+      if (await mapboxMap.style.styleLayerExists('${markerId}-circle')) {
+        await mapboxMap.style.removeStyleLayer('${markerId}-circle');
+      }
+      // Try to remove source
+      try {
+        await mapboxMap.style.removeStyleSource(markerId);
+      } catch (e) {
+        // Ignore errors if source doesn't exist
+      }
+      return true;
+    } catch (e) {
+      debugPrint('Error removing marker: $e');
+      return false;
+    }
+  }
+
   // Move camera to current location
   static Future<void> animateCameraToCurrentLocation(
     MapboxMap mapboxMap,
@@ -144,6 +241,29 @@ class MapService {
       );
     } catch (e) {
       print('Error moving camera to current location: $e');
+    }
+  }
+
+  // Animate camera to specific position
+  static Future<void> animateCameraToPosition(
+    MapboxMap mapboxMap,
+    Position position, {
+    double zoom = 16.0,
+  }) async {
+    try {
+      final cameraOptions = CameraOptions(
+        center: Point(coordinates: position),
+        zoom: zoom,
+        bearing: 0,
+        pitch: 0,
+      );
+
+      mapboxMap.flyTo(
+        cameraOptions,
+        MapAnimationOptions(duration: 1000, startDelay: 0),
+      );
+    } catch (e) {
+      print('Error moving camera to position: $e');
     }
   }
 
