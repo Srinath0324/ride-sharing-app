@@ -10,6 +10,33 @@ class Validators {
       return 'Please enter a valid email address';
     }
 
+    // Whitelist approach for valid email domains
+    final validEmailDomains = [
+      'gmail.com',
+      'yahoo.com',
+      'outlook.com',
+      'hotmail.com',
+      'icloud.com',
+      'aol.com',
+      'protonmail.com',
+      'mail.com',
+      'zoho.com',
+      'yandex.com',
+      'gmx.com',
+      'live.com',
+      'msn.com',
+      'rocketmail.com',
+      'rediffmail.com',
+    ];
+
+    final emailParts = value.split('@');
+    if (emailParts.length == 2) {
+      final domain = emailParts[1].toLowerCase();
+      if (!validEmailDomains.contains(domain)) {
+        return 'provide a valid email from a recognized provider';
+      }
+    }
+
     return null;
   }
 
@@ -58,6 +85,10 @@ class Validators {
       return 'Name must be at least 2 characters long';
     }
 
+    if (value.length > 50) {
+      return 'Name must be at most 50 characters long';
+    }
+
     return null;
   }
 
@@ -70,6 +101,13 @@ class Validators {
       return 'Please enter a valid 12 digit Aadhaar number';
     }
 
+    return null;
+  }
+
+  static String? validateGender(String? value) {
+    if (value == null || value.isEmpty || value == 'Select') {
+      return 'Please select a gender';
+    }
     return null;
   }
 }

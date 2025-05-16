@@ -5,6 +5,9 @@ import '../constants/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../utils/validators.dart';
 import '../widgets/custom_text_field.dart';
+import '../services/preferences_service.dart';
+import 'package:flutter/services.dart';
+import '../widgets/custom_button.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -20,8 +23,11 @@ class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _mobileController = TextEditingController();
   final TextEditingController _aadhaarController = TextEditingController();
-  String _selectedGender = 'Male';
+  final PreferencesService _preferencesService = PreferencesService();
+  String _selectedGender = 'Select';
   bool _isConsentChecked = false;
+  bool _isLoading = false;
+  bool _isSignupLoading = false; // New loading state for signup button
 
   @override
   void dispose() {
@@ -44,25 +50,84 @@ class _SignupScreenState extends State<SignupScreen> {
         return;
       }
 
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (_selectedGender == 'Select') {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Please select a gender')));
+        return;
+      }
 
-      final success = await authProvider.register(
-        name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-        phoneNumber: _mobileController.text.trim(),
-        aadhaarNumber: _aadhaarController.text.trim(),
-        gender: _selectedGender,
-      );
+      setState(() {
+        _isSignupLoading = true; // Show loading indicator for signup
+      });
 
-      if (success && mounted) {
-        _showVerificationCard();
+      try {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+        final success = await authProvider.register(
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          phoneNumber: _mobileController.text.trim(),
+          aadhaarNumber: _aadhaarController.text.trim(),
+          gender: _selectedGender,
+        );
+
+        if (success && mounted) {
+          // Mark onboarding as completed
+          await _preferencesService.setFirstTimeDone();
+          _showVerificationCard();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Registration failed: ${e.toString()}')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isSignupLoading = false; // Hide loading indicator
+          });
+        }
       }
     }
   }
 
   void _navigateToLogin() {
     Navigator.pushReplacementNamed(context, AppRoutes.login);
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final success = await authProvider.signInWithGoogle();
+
+      if (success && mounted) {
+        await _preferencesService.setFirstTimeDone();
+        Navigator.pushReplacementNamed(context, AppRoutes.home);
+      } else if (mounted && authProvider.errorMessage != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(authProvider.errorMessage!)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sign in failed: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _showVerificationCard() {
@@ -151,7 +216,10 @@ class _SignupScreenState extends State<SignupScreen> {
           SizedBox(
             width: size.width,
             height: MediaQuery.of(context).size.height * 0.4,
-            child: Image.asset('assets/images/get-started.png', fit: BoxFit.cover),
+            child: Image.asset(
+              'assets/images/get-started.png',
+              fit: BoxFit.cover,
+            ),
           ),
 
           // Content overlay
@@ -215,6 +283,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           keyboardType: TextInputType.name,
                           validator: Validators.validateName,
                           prefixIcon: Icon(Icons.person_outline),
+                          maxLength: 50,
                         ),
                         const SizedBox(height: 16),
 
@@ -235,6 +304,11 @@ class _SignupScreenState extends State<SignupScreen> {
                           hint: 'Enter mobile number',
                           controller: _mobileController,
                           keyboardType: TextInputType.phone,
+                          maxLength: 10,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(10),
+                          ],
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your mobile number';
@@ -254,6 +328,11 @@ class _SignupScreenState extends State<SignupScreen> {
                           hint: 'Enter Aadhaar number',
                           controller: _aadhaarController,
                           keyboardType: TextInputType.number,
+                          maxLength: 12,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(12),
+                          ],
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your Aadhaar number';
@@ -292,7 +371,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                   isExpanded: true,
                                   value: _selectedGender,
                                   items:
-                                      ['Male', 'Female', 'Other']
+                                      ['Select', 'Male', 'Female', 'Other']
                                           .map(
                                             (gender) => DropdownMenuItem(
                                               value: gender,
@@ -310,6 +389,20 @@ class _SignupScreenState extends State<SignupScreen> {
                                 ),
                               ),
                             ),
+                            if (_selectedGender == 'Select')
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 8,
+                                  left: 12,
+                                ),
+                                child: Text(
+                                  'Please select a gender',
+                                  style: TextStyle(
+                                    color: Colors.red[700],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -350,26 +443,36 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                         const SizedBox(height: 30),
 
-                        // Sign Up button
+                        // Sign Up button with loading indicator
                         SizedBox(
                           width: double.infinity,
                           height: 56,
                           child: ElevatedButton(
-                            onPressed: _register,
+                            onPressed: _isSignupLoading ? null : _register,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.primaryColor,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(28),
                               ),
                             ),
-                            child: const Text(
-                              "Sign Up",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                            child:
+                                _isSignupLoading
+                                    ? const SizedBox(
+                                      height: 24,
+                                      width: 24,
+                                      child: CircularProgressIndicator(
+                                        color: AppTheme.primaryColor,
+                                        strokeWidth: 2.5,
+                                      ),
+                                    )
+                                    : const Text(
+                                      "Sign Up",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
                           ),
                         ),
                         const SizedBox(height: 20),
@@ -406,34 +509,19 @@ class _SignupScreenState extends State<SignupScreen> {
                         const SizedBox(height: 20),
 
                         // Google Sign Up button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 56,
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              // Google login implementation
-                            },
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: Colors.grey.shade300),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(28),
+                        _isLoading
+                            ? const Center(child: CircularProgressIndicator())
+                            : CustomButton(
+                              title: 'Log In with Google',
+                              onPressed: _signInWithGoogle,
+                              bgVariant: ButtonBgVariant.white,
+                              textVariant: ButtonTextVariant.primary,
+                              iconLeft: Image.asset(
+                                'assets/icons/google.png',
+                                height: 24,
+                                width: 24,
                               ),
                             ),
-                            icon: Image.asset(
-                              'assets/icons/google.png',
-                              width: 24,
-                              height: 24,
-                            ),
-                            label: const Text(
-                              "Log In with Google",
-                              style: TextStyle(
-                                color: Colors.black87,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ),
 
                         // Already have an account
                         Padding(

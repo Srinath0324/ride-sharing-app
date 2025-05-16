@@ -472,7 +472,7 @@ class _BookRideScreenState extends State<BookRideScreen>
   // Format the scheduled date for display
   String _formatScheduledDate() {
     if (_scheduledDate == null) {
-      return '02 May, 8:09 PM';
+      return 'now';
     }
 
     return DateFormat('dd MMM, h:mm a').format(_scheduledDate!);

@@ -41,10 +41,11 @@ class AuthProvider with ChangeNotifier {
 
     try {
       if (useFirebase && _authService != null) {
-        final prefs = await SharedPreferences.getInstance();
-        final userId = prefs.getString(AppConstants.userIdKey);
+        // Check if user is already authenticated with Firebase
+        final currentUser = _authService!.currentUser;
 
-        if (userId != null && _authService!.currentUser != null) {
+        if (currentUser != null) {
+          // User is already signed in
           _user = await _authService!.getUserProfile();
           if (_user != null) {
             _authStatus = AuthStatus.authenticated;
@@ -92,6 +93,14 @@ class AuthProvider with ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  // Check if email exists
+  Future<bool> emailExists(String email) async {
+    if (useFirebase && _authService != null) {
+      return await _authService!.emailExists(email);
+    }
+    return false;
   }
 
   // Register with email and password
@@ -217,6 +226,58 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  // Sign in with Google
+  Future<bool> signInWithGoogle() async {
+    setLoading(true);
+    clearError();
+
+    try {
+      if (useFirebase && _authService != null) {
+        final userCredential = await _authService!.signInWithGoogle();
+
+        if (userCredential?.user != null) {
+          _user = await _authService!.getUserProfile();
+          _authStatus = AuthStatus.authenticated;
+          notifyListeners();
+          return true;
+        }
+        return false;
+      } else {
+        // For demo purposes (when Firebase is not initialized)
+        await Future.delayed(
+          const Duration(seconds: 1),
+        ); // Simulate network delay
+
+        // Create a demo user
+        _user = UserModel(
+          id: '1',
+          name: 'Google User',
+          email: 'google@example.com',
+          phoneNumber: '1234567890',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        // Save login state
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('is_logged_in', true);
+
+        _authStatus = AuthStatus.authenticated;
+        notifyListeners();
+        return true;
+      }
+    } on FirebaseAuthException catch (e) {
+      _handleAuthError(e);
+      return false;
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // Sign out
   Future<void> signOut() async {
     setLoading(true);
@@ -230,6 +291,7 @@ class AuthProvider with ChangeNotifier {
       // Clear login state
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_logged_in', false);
+      // Don't clear firstTimeKey to avoid showing onboarding again
 
       _user = null;
       _authStatus = AuthStatus.unauthenticated;
@@ -285,10 +347,10 @@ class AuthProvider with ChangeNotifier {
         _errorMessage = 'This user has been disabled.';
         break;
       case 'user-not-found':
-        _errorMessage = 'User not found.';
+        _errorMessage = 'Email is not registered, please sign up.';
         break;
       case 'wrong-password':
-        _errorMessage = 'Incorrect password.';
+        _errorMessage = 'Wrong password, try again.';
         break;
       case 'too-many-requests':
         _errorMessage = 'Too many attempts. Try again later.';
@@ -308,5 +370,32 @@ class AuthProvider with ChangeNotifier {
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
+  }
+
+  // Reload user data from Firestore
+  Future<bool> reloadUser() async {
+    setLoading(true);
+    clearError();
+
+    try {
+      if (useFirebase && _authService != null) {
+        _user = await _authService!.getUserProfile();
+        if (_user != null) {
+          _authStatus = AuthStatus.authenticated;
+          notifyListeners();
+          return true;
+        }
+        return false;
+      } else {
+        // For demo purposes, do nothing
+        return true;
+      }
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    } finally {
+      setLoading(false);
+    }
   }
 }

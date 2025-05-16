@@ -70,7 +70,12 @@ class _CustomTextFieldState extends State<CustomTextField> {
           keyboardType: widget.keyboardType,
           obscureText: _obscureText,
           validator: widget.validator,
-          inputFormatters: widget.inputFormatters,
+          inputFormatters:
+              widget.inputFormatters ??
+              [
+                if (widget.maxLength != null)
+                  LengthLimitingTextInputFormatter(widget.maxLength),
+              ],
           maxLength: widget.maxLength,
           maxLines: widget.maxLines,
           readOnly: widget.readOnly,

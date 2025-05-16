@@ -5,6 +5,8 @@ import '../constants/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../utils/validators.dart';
 import '../widgets/custom_text_field.dart';
+import '../widgets/custom_button.dart';
+import '../services/preferences_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,6 +19,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final PreferencesService _preferencesService = PreferencesService();
+  String? _loginError;
+  bool _isLoading = false;
+  bool _isSignInLoading = false; // New loading state for sign in button
 
   @override
   void dispose() {
@@ -26,22 +32,82 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
-    if (_formKey.currentState?.validate() ?? false) {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    // Clear any previous error
+    setState(() {
+      _loginError = null;
+      _isSignInLoading = true; // Show loading indicator for sign in
+    });
 
-      final success = await authProvider.signIn(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
+    try {
+      if (_formKey.currentState?.validate() ?? false) {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
-      if (success && mounted) {
-        _showVerificationCard();
+        final success = await authProvider.signIn(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+
+        if (success && mounted) {
+          // Ensure onboarding is marked as completed
+          await _preferencesService.setFirstTimeDone();
+          // Show verification card
+          _showVerificationCard();
+        } else if (mounted) {
+          // Check error type from auth provider
+          setState(() {
+            _loginError = authProvider.errorMessage;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loginError = 'Login failed: ${e.toString()}';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSignInLoading = false; // Hide loading indicator
+        });
       }
     }
   }
 
   void _navigateToSignup() {
     Navigator.pushNamed(context, AppRoutes.signup);
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final success = await authProvider.signInWithGoogle();
+
+      if (success && mounted) {
+        await _preferencesService.setFirstTimeDone();
+        Navigator.pushReplacementNamed(context, AppRoutes.home);
+      } else if (mounted && authProvider.errorMessage != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(authProvider.errorMessage!)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sign in failed: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _showVerificationCard() {
@@ -130,7 +196,10 @@ class _LoginScreenState extends State<LoginScreen> {
           SizedBox(
             width: size.width,
             height: MediaQuery.of(context).size.height * 0.4,
-            child: Image.asset('assets/images/get-started.png', fit: BoxFit.cover),
+            child: Image.asset(
+              'assets/images/get-started.png',
+              fit: BoxFit.cover,
+            ),
           ),
 
           // Content overlay
@@ -189,7 +258,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Email field
                         CustomTextField(
                           label: 'Email',
-                          hint: 'admin@jsmastery.pr',
+                          hint: 'Enter your email',
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           validator: Validators.validateEmail,
@@ -206,28 +275,53 @@ class _LoginScreenState extends State<LoginScreen> {
                           validator: Validators.validatePassword,
                           prefixIcon: Icon(Icons.lock_outline),
                         ),
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 8),
 
-                        // Sign in button
+                        // Error message if login fails
+                        if (_loginError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8, bottom: 8),
+                            child: Text(
+                              _loginError!,
+                              style: TextStyle(
+                                color: Colors.red[700],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+
+                        const SizedBox(height: 32),
+
+                        // Sign in button with loading indicator
                         SizedBox(
                           width: double.infinity,
                           height: 56,
                           child: ElevatedButton(
-                            onPressed: _login,
+                            onPressed: _isSignInLoading ? null : _login,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.primaryColor,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(28),
                               ),
                             ),
-                            child: const Text(
-                              "Sign in",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                            child:
+                                _isSignInLoading
+                                    ? const SizedBox(
+                                      height: 24,
+                                      width: 24,
+                                      child: CircularProgressIndicator(
+                                        color: AppTheme.primaryColor,
+                                        strokeWidth: 2.5,
+                                      ),
+                                    )
+                                    : const Text(
+                                      "Sign in",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
                           ),
                         ),
                         const SizedBox(height: 20),
@@ -264,34 +358,19 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 20),
 
                         // Google Sign In button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 56,
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              // Google login implementation
-                            },
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: Colors.grey.shade300),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(28),
+                        _isLoading
+                            ? const Center(child: CircularProgressIndicator())
+                            : CustomButton(
+                              title: 'Log In with Google',
+                              onPressed: _signInWithGoogle,
+                              bgVariant: ButtonBgVariant.white,
+                              textVariant: ButtonTextVariant.primary,
+                              iconLeft: Image.asset(
+                                'assets/icons/google.png',
+                                height: 24,
+                                width: 24,
                               ),
                             ),
-                            icon: Image.asset(
-                              'assets/icons/google.png',
-                              width: 24,
-                              height: 24,
-                            ),
-                            label: const Text(
-                              "Log In with Google",
-                              style: TextStyle(
-                                color: Colors.black87,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ),
 
                         // Don't have an account
                         Padding(

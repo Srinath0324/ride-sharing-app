@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../constants/app_constants.dart';
 import '../constants/app_routes.dart';
 import '../constants/app_theme.dart';
+import '../providers/auth_provider.dart';
 import '../services/preferences_service.dart';
 import '../widgets/custom_button.dart';
 
@@ -18,6 +20,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PreferencesService _preferencesService = PreferencesService();
   int _currentIndex = 0;
   bool _showFinalPage = false;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -41,9 +44,50 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _completeOnboarding() async {
+    // Set onboarding as completed
     await _preferencesService.setFirstTimeDone();
+
     if (!mounted) return;
-    Navigator.pushReplacementNamed(context, AppRoutes.home);
+
+    // Check if user is already authenticated
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (authProvider.isAuthenticated) {
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
+    } else {
+      Navigator.pushReplacementNamed(context, AppRoutes.login);
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final success = await authProvider.signInWithGoogle();
+
+      if (success && mounted) {
+        await _preferencesService.setFirstTimeDone();
+        Navigator.pushReplacementNamed(context, AppRoutes.home);
+      } else if (mounted && authProvider.errorMessage != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(authProvider.errorMessage!)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sign in failed: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -202,7 +246,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       const SizedBox(height: 40),
                       CustomButton(
                         title: 'Sign Up',
-                        onPressed: () {
+                        onPressed: () async {
+                          await _preferencesService.setFirstTimeDone();
+                          if (!mounted) return;
                           Navigator.pushReplacementNamed(
                             context,
                             AppRoutes.signup,
@@ -231,17 +277,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ],
                       ),
                       const SizedBox(height: 20),
-                      CustomButton(
-                        title: 'Log In with Google',
-                        onPressed: _completeOnboarding,
-                        bgVariant: ButtonBgVariant.white,
-                        textVariant: ButtonTextVariant.primary,
-                        iconLeft: Image.asset(
-                          'assets/icons/google.png',
-                          height: 24,
-                          width: 24,
-                        ),
-                      ),
+                      _isLoading
+                          ? const CircularProgressIndicator()
+                          : CustomButton(
+                            title: 'Log In with Google',
+                            onPressed: _signInWithGoogle,
+                            bgVariant: ButtonBgVariant.white,
+                            textVariant: ButtonTextVariant.primary,
+                            iconLeft: Image.asset(
+                              'assets/icons/google.png',
+                              height: 24,
+                              width: 24,
+                            ),
+                          ),
                       const Spacer(),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
