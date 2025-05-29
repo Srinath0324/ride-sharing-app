@@ -11,6 +11,11 @@ class MapService {
   static String? _styleUrl;
   static bool _hasLocationPermission = false;
 
+  // Add a constant for location puck customization
+  static const Color locationPuckColor = Color(
+    0xFF1A73E8,
+  ); // Google Maps-like blue
+
   factory MapService() {
     return _instance;
   }
@@ -44,6 +49,31 @@ class MapService {
   }
 
   static bool get hasLocationPermission => _hasLocationPermission;
+
+  // Check if location services are enabled
+  static Future<bool> isLocationServiceEnabled() async {
+    return await geo.Geolocator.isLocationServiceEnabled();
+  }
+
+  // Check location permission status
+  static Future<geo.LocationPermission> checkLocationPermission() async {
+    return await geo.Geolocator.checkPermission();
+  }
+
+  // Open location settings
+  static Future<bool> openLocationSettings() async {
+    return await geo.Geolocator.openLocationSettings();
+  }
+
+  // Open app settings
+  static Future<bool> openAppSettings() async {
+    return await geo.Geolocator.openAppSettings();
+  }
+
+  // Request location permission
+  static Future<geo.LocationPermission> requestLocationPermission() async {
+    return await geo.Geolocator.requestPermission();
+  }
 
   // Request location permission and return position
   static Future<geo.Position> getCurrentLocation() async {
@@ -101,36 +131,70 @@ class MapService {
     }
   }
 
-  // Set up enhanced location puck on the map
+  // Set up location puck on the map (replaced implementation)
   static void setupLocationPuck(MapboxMap mapboxMap) {
-    mapboxMap.location.updateSettings(
-      LocationComponentSettings(
-        enabled: true,
-        showAccuracyRing: true,
-        accuracyRingColor: Colors.blue.withOpacity(0.2).value,
-        accuracyRingBorderColor: Colors.blue.value,
-        pulsingEnabled: true,
-        pulsingColor: Colors.blue.value,
-        pulsingMaxRadius: 100,
-        locationPuck: LocationPuck(
-          locationPuck2D: LocationPuck2D(
-            topImage: null, // Using default
-            bearingImage: null, // Using default
-            shadowImage: null, // Using default
-            scaleExpression:
-                [
-                  'interpolate',
-                  ['linear'],
-                  ['zoom'],
-                  0,
-                  0.6,
-                  20,
-                  1.0,
-                ].toString(),
+    try {
+      // Configure a reliable, non-delayed location puck
+      mapboxMap.location.updateSettings(
+        LocationComponentSettings(
+          enabled: true,
+          showAccuracyRing: true,
+          accuracyRingColor: locationPuckColor.withOpacity(0.1).value,
+          accuracyRingBorderColor: locationPuckColor.withOpacity(0.3).value,
+          pulsingEnabled: false, // Disable pulsing for reliability
+          puckBearingEnabled: true, // Show heading when available
+          locationPuck: LocationPuck(
+            locationPuck2D: LocationPuck2D(
+              topImage: null, // Using default
+              bearingImage: null, // Using default
+              shadowImage: null, // Using default
+            ),
           ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      debugPrint('Error setting up location puck: $e');
+    }
+  }
+
+  // Start continuous location updates for real-time tracking
+  static StreamSubscription<geo.Position>? startLocationUpdates(
+    MapboxMap mapboxMap,
+    void Function(geo.Position) onLocationUpdate,
+  ) {
+    try {
+      // Set up a high-accuracy, real-time location stream
+      final Stream<geo.Position> positionStream = geo
+          .Geolocator.getPositionStream(
+        locationSettings: const geo.LocationSettings(
+          accuracy: geo.LocationAccuracy.high,
+          distanceFilter: 5, // Update if moved 5 meters
+        ),
+      );
+
+      // Subscribe to location updates
+      final subscription = positionStream.listen((geo.Position position) {
+        // Update the map's location settings to reflect accuracy
+        mapboxMap.location.updateSettings(
+          LocationComponentSettings(
+            enabled: true,
+            showAccuracyRing: true,
+            accuracyRingColor: locationPuckColor.withOpacity(0.1).value,
+            accuracyRingBorderColor: locationPuckColor.withOpacity(0.3).value,
+            // Accuracy radius based on the reported accuracy
+            puckBearingEnabled: true,
+          ),
+        );
+
+        // Call the provided callback with the new position
+        onLocationUpdate(position);
+      });
+
+      return subscription;
+    } catch (e) {
+      debugPrint('Error starting location updates: $e');
+      return null;
+    }
   }
 
   // Add a custom location marker to the map
@@ -241,6 +305,7 @@ class MapService {
       );
     } catch (e) {
       print('Error moving camera to current location: $e');
+      rethrow;
     }
   }
 

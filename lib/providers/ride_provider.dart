@@ -46,6 +46,7 @@ class RideProvider with ChangeNotifier {
         longitude: 77.5946,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
+        cabTypes: const ['shared', 'private'], // Both types
       ),
       DriverModel(
         id: 'driver2',
@@ -61,6 +62,7 @@ class RideProvider with ChangeNotifier {
         longitude: 77.5942,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
+        cabTypes: const ['shared'], // Only shared
       ),
       DriverModel(
         id: 'driver3',
@@ -76,6 +78,7 @@ class RideProvider with ChangeNotifier {
         longitude: 77.5952,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
+        cabTypes: const ['private'], // Only private
       ),
       DriverModel(
         id: 'driver4',
@@ -91,6 +94,39 @@ class RideProvider with ChangeNotifier {
         longitude: 77.5939,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
+        cabTypes: const ['shared', 'private'], // Both types
+      ),
+      DriverModel(
+        id: 'driver5',
+        name: 'Dianne Russell',
+        phoneNumber: '+91 98765 43214',
+        rating: 4.6,
+        totalRides: 215,
+        carModel: 'Mahindra XUV',
+        carColor: 'Black',
+        carNumber: 'KA 02 IJ 7890',
+        totalSeats: 6,
+        latitude: 12.9725,
+        longitude: 77.5935,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        cabTypes: const ['shared'], // Only shared - larger vehicle
+      ),
+      DriverModel(
+        id: 'driver6',
+        name: 'Kathryn Murphy',
+        phoneNumber: '+91 98765 43215',
+        rating: 4.9,
+        totalRides: 310,
+        carModel: 'Mercedes E-Class',
+        carColor: 'Silver',
+        carNumber: 'KA 05 KL 1234',
+        totalSeats: 3,
+        latitude: 12.9730,
+        longitude: 77.5930,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        cabTypes: const ['private'], // Only private - luxury vehicle
       ),
     ]);
   }
@@ -107,6 +143,7 @@ class RideProvider with ChangeNotifier {
     required double initialFare,
     DateTime? scheduledTime,
     required int seats,
+    required String rideType,
   }) {
     final id = _uuid.v4();
 
@@ -124,6 +161,7 @@ class RideProvider with ChangeNotifier {
       scheduledTime: scheduledTime,
       status: 'pending',
       seats: seats,
+      rideType: rideType,
     );
 
     _rideRequests.add(request);
@@ -143,12 +181,31 @@ class RideProvider with ChangeNotifier {
     final updatedRequest = request.copyWith(status: 'negotiating');
     _updateRideRequest(updatedRequest);
 
+    // Filter drivers based on ride requirements
+    final filteredDrivers =
+        _nearbyDrivers.where((driver) {
+          // Check if driver supports the requested cab type
+          bool supportsRequestedCabType = driver.cabTypes.contains(
+            request.rideType,
+          );
+
+          // For shared rides, make sure driver has enough seats
+          bool hasEnoughSeats =
+              request.rideType == 'private' ||
+              driver.totalSeats >= request.seats;
+
+          // In a real app, we would also check driver availability, location, etc.
+          return supportsRequestedCabType &&
+              hasEnoughSeats &&
+              driver.isAvailable;
+        }).toList();
+
     // Create counter offers from drivers with random amounts
     final random = Random();
 
-    for (var driver in _nearbyDrivers) {
-      // Random variation of the original fare (between 90% and 110%)
-      final variation = 0.9 + (random.nextDouble() * 0.2);
+    for (var driver in filteredDrivers) {
+      // Random variation of the original fare (between 90% and 120%)
+      final variation = 0.9 + (random.nextDouble() * 0.3);
       final counterAmount = request.initialFare * variation;
 
       // Create the counter offer
@@ -159,7 +216,7 @@ class RideProvider with ChangeNotifier {
         amount: double.parse(counterAmount.toStringAsFixed(2)),
         timestamp: DateTime.now(),
         status: 'pending',
-        message: 'I can take you for \$${counterAmount.toStringAsFixed(2)}',
+        message: 'I can take you for ₹${counterAmount.toInt()}',
       );
 
       _fareOffers.add(counterOffer);
@@ -249,6 +306,7 @@ class RideProvider with ChangeNotifier {
     required String driverId,
     required double amount,
     String? message,
+    bool ensureResponse = false,
   }) {
     // Find the ride request
     final requestIndex = _rideRequests.indexWhere(
@@ -283,7 +341,11 @@ class RideProvider with ChangeNotifier {
 
     // In a real app, this would send the counter to the driver
     // For demo purposes, automatically simulate driver response
-    _simulateDriverResponseToCounter(counterOffer, rideRequestId);
+    _simulateDriverResponseToCounter(
+      counterOffer,
+      rideRequestId,
+      ensureResponse: ensureResponse,
+    );
 
     return counterOffer;
   }
@@ -291,11 +353,12 @@ class RideProvider with ChangeNotifier {
   // Simulate driver response to rider's counter offer
   void _simulateDriverResponseToCounter(
     FareOffer counterOffer,
-    String rideRequestId,
-  ) {
+    String rideRequestId, {
+    bool ensureResponse = false,
+  }) {
     // Random decision to accept or counter again
     final random = Random();
-    final decision = random.nextDouble();
+    final decision = ensureResponse ? 0.4 : random.nextDouble();
 
     if (decision > 0.5) {
       // Driver accepts the counter offer
@@ -319,7 +382,7 @@ class RideProvider with ChangeNotifier {
       _currentRideRequest = updatedRequest;
     } else {
       // Driver counters back
-      final variation = 0.95 + (random.nextDouble() * 0.1); // Smaller variation
+      final variation = 0.95 + (random.nextDouble() * 0.1);
       final newAmount = counterOffer.amount / variation;
 
       // Create new counter offer
@@ -330,7 +393,7 @@ class RideProvider with ChangeNotifier {
         amount: double.parse(newAmount.toStringAsFixed(2)),
         timestamp: DateTime.now(),
         status: 'pending',
-        message: 'My final offer is \$${newAmount.toStringAsFixed(2)}',
+        message: 'My final offer is ₹${newAmount.toInt()}',
       );
 
       _fareOffers.add(newCounterOffer);

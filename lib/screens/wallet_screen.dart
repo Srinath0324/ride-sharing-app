@@ -16,6 +16,16 @@ class WalletScreen extends StatefulWidget {
 class _WalletScreenState extends State<WalletScreen> {
   final TextEditingController _amountController = TextEditingController();
   final FocusNode _amountFocusNode = FocusNode();
+  bool _isLoadingLocal = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Refresh wallet data when screen is opened
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<WalletProvider>(context, listen: false).loadWalletData();
+    });
+  }
 
   @override
   void dispose() {
@@ -24,27 +34,55 @@ class _WalletScreenState extends State<WalletScreen> {
     super.dispose();
   }
 
-  void _addMoney() {
+  Future<void> _addMoney() async {
     if (_amountController.text.isEmpty) return;
 
     final amount = int.tryParse(_amountController.text) ?? 0;
     if (amount <= 0) return;
 
-    // Use wallet provider to add money
-    Provider.of<WalletProvider>(context, listen: false).addMoney(amount);
+    setState(() {
+      _isLoadingLocal = true;
+    });
 
-    // Clear input and hide keyboard
-    _amountController.clear();
-    FocusScope.of(context).unfocus();
+    try {
+      // Use wallet provider to add money
+      await Provider.of<WalletProvider>(
+        context,
+        listen: false,
+      ).addMoney(amount);
 
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Added $amount coins to your wallet!'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+      // Clear input and hide keyboard
+      _amountController.clear();
+      FocusScope.of(context).unfocus();
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Added $amount coins to your wallet!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to add money: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingLocal = false;
+        });
+      }
+    }
   }
 
   @override
@@ -52,7 +90,9 @@ class _WalletScreenState extends State<WalletScreen> {
     // Get wallet data from provider
     final walletProvider = Provider.of<WalletProvider>(context);
     final balance = walletProvider.balance;
-    final transactions = walletProvider.transactions;
+    final transactions = walletProvider.transactions.toList();
+    final isLoading = walletProvider.isLoading || _isLoadingLocal;
+    final errorMessage = walletProvider.errorMessage;
 
     return Scaffold(
       appBar: AppBar(
@@ -64,227 +104,295 @@ class _WalletScreenState extends State<WalletScreen> {
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
+        actions: [
+          // Refresh button
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: isLoading ? null : () => walletProvider.loadWalletData(),
+            tooltip: 'Refresh wallet data',
+          ),
+        ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Wallet balance card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppTheme.primaryColor,
-                      AppTheme.primaryColor.withOpacity(0.8),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primaryColor.withOpacity(0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Current Balance',
-                      style: TextStyle(color: Colors.white, fontSize: 16),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Image.asset(
-                          'assets/icons/coin.png',
-                          width: 32,
-                          height: 32,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Icon(
-                              Icons.monetization_on,
-                              color: Colors.amber,
-                              size: 32,
-                            );
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '$balance',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Text(
-                          'coins',
-                          style: TextStyle(color: Colors.white, fontSize: 18),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Use your coins to pay for rides!',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Add Money',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _amountController,
-                      focusNode: _amountFocusNode,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      onSubmitted: (_) => _addMoney(),
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.currency_rupee),
-                        prefixIconColor: Colors.grey,
-                        hintText: 'Enter amount in rupees',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: AppTheme.primaryColor),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    height: 58,
-                    child: ElevatedButton(
-                      onPressed: _addMoney,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text(
-                        'Add',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              const Text(
-                'Quick Add',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildQuickAddButton(100),
-                  _buildQuickAddButton(200),
-                  _buildQuickAddButton(500),
-                ],
-              ),
-
-              const SizedBox(height: 32),
-
-              const Text(
-                'Recent Transactions',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              transactions.isNotEmpty
-                  ? ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: transactions.length,
-                    itemBuilder: (context, index) {
-                      final transaction = transactions[index];
-                      return _buildTransactionItem(
-                        transaction.title,
-                        transaction.amount,
-                        transaction.date,
-                        isCredit: transaction.isCredit,
-                      );
-                    },
-                  )
-                  : Column(
-                    mainAxisSize: MainAxisSize.min,
+      body:
+          isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : errorMessage != null
+              ? _buildErrorWidget(errorMessage, walletProvider)
+              : SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 40),
-                      Icon(
-                        Icons.account_balance_wallet_outlined,
-                        size: 64,
-                        color: Colors.grey[300],
+                      // Wallet balance card
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.primaryColor,
+                              AppTheme.primaryColor.withOpacity(0.8),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryColor.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Current Balance',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Image.asset(
+                                  'assets/icons/coin.png',
+                                  width: 32,
+                                  height: 32,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Icon(
+                                      Icons.monetization_on,
+                                      color: Colors.amber,
+                                      size: 32,
+                                    );
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '$balance',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'coins',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Use your coins to pay for rides!',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Add Money',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      Text(
-                        'No transactions yet',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _amountController,
+                              focusNode: _amountFocusNode,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              onSubmitted: (_) => _addMoney(),
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(Icons.currency_rupee),
+                                prefixIconColor: Colors.grey,
+                                hintText: 'Enter amount in rupees',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey.shade300,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            height: 58,
+                            child: ElevatedButton(
+                              onPressed: _isLoadingLocal ? null : _addMoney,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child:
+                                  _isLoadingLocal
+                                      ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                      : const Text(
+                                        'Add',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                            ),
+                          ),
+                        ],
                       ),
+
+                      const SizedBox(height: 24),
+
+                      const Text(
+                        'Quick Add',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildQuickAddButton(100),
+                          _buildQuickAddButton(200),
+                          _buildQuickAddButton(500),
+                        ],
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      const Text(
+                        'Recent Transactions',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      transactions.isNotEmpty
+                          ? ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: transactions.length,
+                            itemBuilder: (context, index) {
+                              final transaction = transactions[index];
+                              return _buildTransactionItem(
+                                transaction.title,
+                                transaction.amount,
+                                transaction.date,
+                                isCredit: transaction.isCredit,
+                              );
+                            },
+                          )
+                          : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(height: 40),
+                              Icon(
+                                Icons.account_balance_wallet_outlined,
+                                size: 64,
+                                color: Colors.grey[300],
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No transactions yet',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
                     ],
                   ),
-            ],
-          ),
-        ),
-      ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: 2, // Wallet is at index 2
-        onTap: (index) {
-          if (index == 2) {
-            return; // Already on the wallet tab
-          }
+                ),
+              ),
+    );
+  }
 
-          // Navigate to the selected screen
-          switch (index) {
-            case 0:
-              Navigator.pushReplacementNamed(context, AppRoutes.home);
-              break;
-            case 1:
-              Navigator.pushReplacementNamed(context, AppRoutes.rideHistory);
-              break;
-            case 3:
-              Navigator.pushReplacementNamed(context, AppRoutes.chat);
-              break;
-            case 4:
-              Navigator.pushReplacementNamed(context, AppRoutes.profile);
-              break;
-          }
-        },
+  Widget _buildErrorWidget(String errorMessage, WalletProvider walletProvider) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 64),
+            const SizedBox(height: 16),
+            Text(
+              'Error loading wallet data',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              errorMessage,
+              style: const TextStyle(fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => walletProvider.loadWalletData(),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try Again'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildQuickAddButton(int amount) {
     return InkWell(
-      onTap: () {
-        _amountController.text = amount.toString();
-        _addMoney();
-      },
+      onTap:
+          _isLoadingLocal
+              ? null
+              : () {
+                _amountController.text = amount.toString();
+                _addMoney();
+              },
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),

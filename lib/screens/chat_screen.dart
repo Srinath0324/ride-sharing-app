@@ -148,38 +148,6 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
       body: _showConversation ? _buildChatInterface() : _buildEmptyChat(),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: _currentNavIndex,
-        onTap: (index) {
-          if (index == _currentNavIndex) {
-            return; // Already on this tab
-          }
-
-          // Navigate to the selected screen
-          switch (index) {
-            case 0:
-              Navigator.pushReplacementNamed(context, AppRoutes.home);
-              break;
-            case 1:
-              Navigator.pushReplacementNamed(context, AppRoutes.rideHistory);
-              break;
-            case 2:
-              Navigator.pushReplacementNamed(context, AppRoutes.wallet);
-              break;
-            case 3:
-              // Already on chat screen
-              break;
-            case 4:
-              Navigator.pushReplacementNamed(context, AppRoutes.profile);
-              break;
-          }
-
-          // Update the index after navigation
-          setState(() {
-            _currentNavIndex = index;
-          });
-        },
-      ),
     );
   }
 

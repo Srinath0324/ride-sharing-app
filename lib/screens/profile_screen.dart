@@ -586,28 +586,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: 4,
-        onTap: (index) {
-          if (index == 4) return; // Already on profile tab
-
-          // Navigate to the selected screen
-          switch (index) {
-            case 0:
-              Navigator.pushReplacementNamed(context, AppRoutes.home);
-              break;
-            case 1:
-              Navigator.pushReplacementNamed(context, AppRoutes.rideHistory);
-              break;
-            case 2:
-              Navigator.pushReplacementNamed(context, AppRoutes.wallet);
-              break;
-            case 3:
-              Navigator.pushReplacementNamed(context, AppRoutes.chat);
-              break;
-          }
-        },
-      ),
     );
   }
 

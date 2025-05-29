@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:intl/intl.dart';
 import '../constants/app_routes.dart';
 import '../constants/app_theme.dart';
 import '../providers/auth_provider.dart';
+import '../providers/ride_history_provider.dart';
+import '../models/ride_history_model.dart';
 import '../widgets/bottom_navbar.dart';
 import '../widgets/location_button.dart';
 import '../widgets/map_widget.dart';
@@ -24,15 +27,27 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _currentLocationAddress;
   bool _isLoadingLocation = false;
 
-  // Sample recent rides data
-  final Map<String, dynamic> _recentRide = {
-    'from': '1901 Thornridge Cir. Shiloh',
-    'to': '4140 Parker Rd. Allentown',
-    'date': '16 July 2023, 10:30 PM',
-    'driver': 'Jane Cooper',
-    'seats': 4,
-    'status': 'Paid',
-  };
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadLatestRide();
+    });
+  }
+
+  // Format the date for display
+  String _formatDate(DateTime dateTime) {
+    return DateFormat('dd MMMM yyyy, hh:mm a').format(dateTime);
+  }
+
+  // Load latest ride from provider
+  Future<void> _loadLatestRide() async {
+    final rideHistoryProvider = Provider.of<RideHistoryProvider>(
+      context,
+      listen: false,
+    );
+    await rideHistoryProvider.loadLatestRide();
+  }
 
   void _onMapCreated(MapboxMap mapboxMap) {
     _mapboxMap = mapboxMap;
@@ -77,8 +92,278 @@ class _HomeScreenState extends State<HomeScreen> {
       _isLoadingLocation = true;
     });
 
-    // This will be called when the location button is pressed
-    _updateCurrentLocationAddress();
+    // The LocationButton widget will handle permissions
+    // We just need to set up the callback for when location is obtained
+  }
+
+  void _onLocationPermissionResult(bool success) {
+    if (success) {
+      // Permission granted and location obtained, update address
+      _updateCurrentLocationAddress();
+    } else {
+      // Permission denied or error getting location
+      setState(() {
+        _isLoadingLocation = false;
+        _currentLocationAddress = 'Location access required';
+      });
+    }
+  }
+
+  // Build the recent rides section
+  Widget _buildRecentRidesSection(BuildContext context) {
+    return Consumer<RideHistoryProvider>(
+      builder: (context, rideHistoryProvider, child) {
+        final latestRide = rideHistoryProvider.latestRide;
+        final isLoading = rideHistoryProvider.isLoading;
+        final hasError = rideHistoryProvider.errorMessage != null;
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Recent Rides',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              if (isLoading)
+                const Center(child: CircularProgressIndicator())
+              else if (hasError)
+                Center(
+                  child: Column(
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.red),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${rideHistoryProvider.errorMessage}',
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ],
+                  ),
+                )
+              else if (latestRide == null)
+                Center(
+                  child: Column(
+                    children: [
+                      Image.asset(
+                        'assets/images/no-result.png',
+                        width: 100,
+                        height: 100,
+                        fit: BoxFit.contain,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'No ride history found',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                // Recent ride card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      // Map thumbnail and route details
+                      Row(
+                        children: [
+                          // Small map thumbnail
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.asset(
+                              'assets/images/Map.png',
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+
+                          // From and To locations
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.location_on_outlined,
+                                      size: 20,
+                                      color: Colors.grey,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        latestRide.fromAddress,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.location_on,
+                                      size: 20,
+                                      color: Colors.grey,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        latestRide.toAddress,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+                      const Divider(height: 1),
+                      const SizedBox(height: 16),
+
+                      // Ride details (date, driver, seats, status)
+                      Row(
+                        children: [
+                          // Date & Time
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Date & Time',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  _formatDate(latestRide.dateTime),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Driver
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+
+                              children: [
+                                const Text(
+                                  'Driver',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  latestRide.driverName,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // // Ride Type
+                          // Column(
+                          //   crossAxisAlignment: CrossAxisAlignment.start,
+                          //   children: [
+                          //     const Text(
+                          //       'Ride Type',
+                          //       style: TextStyle(
+                          //         fontSize: 12,
+                          //         color: Colors.grey,
+                          //       ),
+                          //     ),
+                          //     const SizedBox(height: 4),
+                          //     Text(
+                          //       latestRide.rideType == 'shared'
+                          //           ? 'Shared (${latestRide.seats})'
+                          //           : 'Private',
+                          //       style: const TextStyle(
+                          //         fontSize: 12,
+                          //         fontWeight: FontWeight.w500,
+                          //       ),
+                          //     ),
+                          //   ],
+                          // ),
+
+                          // const SizedBox(width: 8),
+
+                          // Fare and Status
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '₹${latestRide.fare.toInt()} ${latestRide.status}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -143,12 +428,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Search bar
                 GestureDetector(
                   onTap: () {
+                    final isValidLocation =
+                        _currentLocationAddress != null &&
+                        _currentLocationAddress != 'Location unavailable' &&
+                        _currentLocationAddress != 'Location access required';
+
                     Navigator.pushNamed(
                       context,
                       AppRoutes.bookRide,
-                      arguments: {'currentLocation': _currentLocationAddress},
+                      arguments:
+                          isValidLocation
+                              ? {'currentLocation': _currentLocationAddress}
+                              : null,
                     );
                   },
+
                   child: Container(
                     margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                     padding: const EdgeInsets.symmetric(
@@ -191,216 +485,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const Spacer(),
 
                 // Recent rides section
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Recent Rides',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Recent ride card
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
-                          children: [
-                            // Map thumbnail and route details
-                            Row(
-                              children: [
-                                // Small map thumbnail
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.asset(
-                                    'assets/images/Map.png',
-                                    width: 80,
-                                    height: 80,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-
-                                // From and To locations
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          const Icon(
-                                            Icons.location_on_outlined,
-                                            size: 20,
-                                            color: Colors.grey,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              _recentRide['from'],
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        children: [
-                                          const Icon(
-                                            Icons.location_on,
-                                            size: 20,
-                                            color: Colors.grey,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              _recentRide['to'],
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 16),
-                            const Divider(height: 1),
-                            const SizedBox(height: 16),
-
-                            // Ride details (date, driver, seats, status)
-                            Row(
-                              children: [
-                                // Date & Time
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'Date & Time',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        _recentRide['date'],
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                // Driver
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'Driver',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        _recentRide['driver'],
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                // Seats
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Seats',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      _recentRide['seats'].toString(),
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-
-                                const SizedBox(width: 8),
-
-                                // Status
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    _recentRide['status'],
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.green,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                _buildRecentRidesSection(context),
               ],
             ),
           ),
@@ -413,41 +498,10 @@ class _HomeScreenState extends State<HomeScreen> {
               child: LocationButton(
                 mapboxMap: _mapboxMap,
                 onLocationButtonPressed: _handleLocationButtonPress,
+                onLocationPermissionResult: _onLocationPermissionResult,
               ),
             ),
         ],
-      ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: _currentNavIndex,
-        onTap: (index) {
-          if (index == _currentNavIndex) {
-            return; // Already on this tab
-          }
-
-          // Navigate to the selected screen
-          switch (index) {
-            case 0:
-              Navigator.pushReplacementNamed(context, AppRoutes.home);
-              break;
-            case 1:
-              Navigator.pushReplacementNamed(context, AppRoutes.rideHistory);
-              break;
-            case 2:
-              Navigator.pushReplacementNamed(context, AppRoutes.wallet);
-              break;
-            case 3:
-              Navigator.pushReplacementNamed(context, AppRoutes.chat);
-              break;
-            case 4:
-              Navigator.pushReplacementNamed(context, AppRoutes.profile);
-              break;
-          }
-
-          // Update the index after navigation
-          setState(() {
-            _currentNavIndex = index;
-          });
-        },
       ),
     );
   }

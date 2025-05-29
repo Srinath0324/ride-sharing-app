@@ -41,8 +41,9 @@ class _BookRideScreenState extends State<BookRideScreen>
   CircleAnnotationManager? _originCircleManager;
   CircleAnnotationManager? _destinationCircleManager;
 
-  // Tab controller for Find Pool / Offer Pool
+  // Tab controller for Shared Cab / Private Cab
   late TabController _tabController;
+  String _rideType = 'shared'; // 'shared' or 'private'
 
   // Seat selection
   int _selectedSeats = 1;
@@ -63,6 +64,13 @@ class _BookRideScreenState extends State<BookRideScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+
+    // Listen to tab changes
+    _tabController.addListener(() {
+      setState(() {
+        _rideType = _tabController.index == 0 ? 'shared' : 'private';
+      });
+    });
   }
 
   @override
@@ -257,14 +265,20 @@ class _BookRideScreenState extends State<BookRideScreen>
   // Add method to calculate estimated fare based on route distance
   void _calculateEstimatedFare(double distanceInKm) {
     // Base fare + per km rate
-    final baseFare = 5.0;
-    final perKmRate = 2.0;
+    final baseFare = 50.0; // Base fare in INR
+    final perKmRate = 15.0; // Per KM rate in INR
 
-    // Calculate fare with minimum fare of $5
+    // Calculate fare with minimum fare of ₹50
     final calculatedFare = baseFare + (distanceInKm * perKmRate);
     setState(() {
       _estimatedFare = calculatedFare;
-      _fareController.text = calculatedFare.toStringAsFixed(2);
+      // Format fare with Indian number system
+      final indianFareFormat = NumberFormat.currency(
+        locale: 'en_IN',
+        symbol: '₹',
+        decimalDigits: 0,
+      );
+      _fareController.text = indianFareFormat.format(calculatedFare).trim();
     });
   }
 
@@ -478,7 +492,7 @@ class _BookRideScreenState extends State<BookRideScreen>
     return DateFormat('dd MMM, h:mm a').format(_scheduledDate!);
   }
 
-  // Add a method to create ride request with fare negotiation
+  // Create a new ride request with fare negotiation
   void _createRideRequest() {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final rideProvider = Provider.of<RideProvider>(context, listen: false);
@@ -499,37 +513,37 @@ class _BookRideScreenState extends State<BookRideScreen>
       return;
     }
 
-    final double proposedFare = double.tryParse(_fareController.text) ?? 0.0;
-    if (proposedFare <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid fare amount')),
-      );
-      return;
-    }
+    // Parse fare amount
+    final String fareText =
+        _fareController.text.replaceAll('₹', '').replaceAll(',', '').trim();
+    final double initialFare = double.tryParse(fareText) ?? _estimatedFare;
 
-    // Create the ride request
+    // Create ride request through provider
     try {
-      rideProvider.createRideRequest(
-        riderId:
-            authProvider.currentUser?.id ??
-            'user1', // Use mock user ID if not logged in
+      final rideRequest = rideProvider.createRideRequest(
+        riderId: authProvider.currentUser!.id,
         fromAddress: _fromController.text,
         toAddress: _toController.text,
         fromLat: _originPosition!.lat,
         fromLng: _originPosition!.lng,
         toLat: _destinationPosition!.lat,
         toLng: _destinationPosition!.lng,
-        initialFare: proposedFare,
-        seats: _selectedSeats,
+        initialFare: initialFare,
         scheduledTime: _scheduledDate,
+        seats: _selectedSeats,
+        rideType: _rideType, // Add ride type parameter
       );
 
-      // Navigate to the fare negotiation screen
+      // Navigate to fare negotiation screen
       Navigator.pushNamed(context, AppRoutes.fareNegotiation);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating ride request: ${e.toString()}')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating ride request: ${e.toString()}'),
+          ),
+        );
+      }
     }
   }
 
@@ -609,16 +623,21 @@ class _BookRideScreenState extends State<BookRideScreen>
                       Padding(
                         padding: const EdgeInsets.only(top: 8.0),
                         child: TabBar(
-                          controller: _tabController,
-                          tabs: const [
-                            Tab(text: 'Shared Cab'),
-                            Tab(text: 'Private Cab'),
-                          ],
-                          indicatorColor: AppTheme.primaryColor,
-                          labelColor: AppTheme.primaryColor,
-                          unselectedLabelColor: Colors.grey,
-                          indicatorWeight: 3,
-                        ),
+  controller: _tabController,
+  tabs: const [
+    Tab(text: 'Shared Cab'),
+    Tab(text: 'Private Cab'),
+  ],
+  indicatorColor: _tabController.index == 0
+      ? Colors.green
+      : Colors.deepPurpleAccent,
+  labelColor: _tabController.index == 0
+      ? Colors.green
+      : Colors.deepPurpleAccent,
+  unselectedLabelColor: Colors.grey,
+  indicatorWeight: 3,
+)
+
                       ),
 
                       // Main content
@@ -726,9 +745,9 @@ class _BookRideScreenState extends State<BookRideScreen>
                                       ),
                                       decoration: BoxDecoration(
                                         border: Border.all(
-                                          color: Colors.grey.shade300,
+                                          color: Colors.grey.shade200,
                                         ),
-                                        borderRadius: BorderRadius.circular(8),
+                                        borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Row(
                                         children: [
@@ -755,36 +774,39 @@ class _BookRideScreenState extends State<BookRideScreen>
 
                                 const SizedBox(width: 12),
 
-                                // Number of seats button
-                                GestureDetector(
-                                  onTap: _showSeatSelectionModal,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: Colors.grey.shade300,
+                                // Number of seats button - only show for shared cab
+                                if (_rideType == 'shared')
+                                  GestureDetector(
+                                    onTap: _showSeatSelectionModal,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
                                       ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.airline_seat_recline_normal,
-                                          size: 16,
-                                          color: Colors.grey,
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: Colors.grey.shade200,
                                         ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          '$_selectedSeats Seat',
-                                          style: const TextStyle(fontSize: 13),
-                                        ),
-                                      ],
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.airline_seat_recline_normal,
+                                            size: 16,
+                                            color: Colors.grey,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '$_selectedSeats Seat',
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                ),
                               ],
                             ),
 
@@ -981,7 +1003,7 @@ class _BookRideScreenState extends State<BookRideScreen>
                         style: TextStyle(fontSize: 14, color: Colors.grey),
                       ),
                       Text(
-                        '\$${_estimatedFare.toStringAsFixed(2)}',
+                        _fareController.text,
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -1001,7 +1023,7 @@ class _BookRideScreenState extends State<BookRideScreen>
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: 'Your Proposed Fare',
-                prefixText: '\$ ',
+                prefixText: '₹ ',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),

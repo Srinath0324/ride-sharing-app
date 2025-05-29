@@ -14,6 +14,7 @@ class DriverModel {
   final bool isAvailable;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final List<String> cabTypes; // 'shared', 'private', or both
 
   DriverModel({
     required this.id,
@@ -31,6 +32,7 @@ class DriverModel {
     this.isAvailable = true,
     required this.createdAt,
     required this.updatedAt,
+    this.cabTypes = const ['shared', 'private'], // Default to both types
   });
 
   // Convert to JSON
@@ -51,6 +53,7 @@ class DriverModel {
       'isAvailable': isAvailable,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
+      'cabTypes': cabTypes,
     };
   }
 
@@ -79,6 +82,10 @@ class DriverModel {
           json['updatedAt'] != null
               ? DateTime.parse(json['updatedAt'])
               : DateTime.now(),
+      cabTypes:
+          json['cabTypes'] != null
+              ? List<String>.from(json['cabTypes'])
+              : const ['shared', 'private'],
     );
   }
 
@@ -99,6 +106,7 @@ class DriverModel {
     bool? isAvailable,
     DateTime? createdAt,
     DateTime? updatedAt,
+    List<String>? cabTypes,
   }) {
     return DriverModel(
       id: id ?? this.id,
@@ -116,6 +124,7 @@ class DriverModel {
       isAvailable: isAvailable ?? this.isAvailable,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      cabTypes: cabTypes ?? this.cabTypes,
     );
   }
 }

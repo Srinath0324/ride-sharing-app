@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import '../services/map_service.dart';
 
 class RydeMapWidget extends StatefulWidget {
@@ -30,12 +31,20 @@ class _RydeMapWidgetState extends State<RydeMapWidget> {
   String? _styleUrl;
   CameraOptions? _initialCameraPosition;
   bool _isMapReady = false;
+  StreamSubscription<geo.Position>? _locationSubscription;
 
   @override
   void initState() {
     super.initState();
     _styleUrl = MapService.styleUrl;
     _loadInitialPosition();
+  }
+
+  @override
+  void dispose() {
+    // Cancel location subscription when widget is disposed
+    _locationSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadInitialPosition() async {
@@ -55,10 +64,16 @@ class _RydeMapWidgetState extends State<RydeMapWidget> {
 
     if (widget.showUserLocation) {
       try {
+        // Use the improved location puck implementation
         MapService.setupLocationPuck(mapboxMap);
+
+        // Start location updates for real-time tracking
+        _locationSubscription = MapService.startLocationUpdates(
+          mapboxMap,
+          _onLocationUpdate,
+        );
       } catch (e) {
-        debugPrint('Error setting up location puck: $e');
-        // Continue without location puck if there's an error
+        debugPrint('Error setting up location tracking: $e');
       }
     }
 
@@ -74,6 +89,13 @@ class _RydeMapWidgetState extends State<RydeMapWidget> {
     if (widget.onMapCreated != null) {
       widget.onMapCreated!(mapboxMap);
     }
+  }
+
+  // Handle location updates
+  void _onLocationUpdate(geo.Position position) {
+    // This will be called whenever location changes
+    // Each screen can override onMapCreated to get the mapboxMap instance
+    // and implement their own location change handling if needed
   }
 
   // Set up a listener for map click events

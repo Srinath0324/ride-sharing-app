@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/ride_provider.dart';
 import '../providers/wallet_provider.dart';
+import '../providers/ride_history_provider.dart';
 import '../models/fare_offer_model.dart';
 import '../models/driver_model.dart';
 import '../constants/app_routes.dart';
@@ -20,8 +21,9 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
   bool _isLoading = false;
   bool _showDriverResponses = false;
   List<String> _selectedDriverIds = [];
+  bool _showCounterOfferInput = false;
   bool _showPaymentSheet = false;
-  bool _paymentCompleted = false; // NEW FLAG
+  bool _paymentCompleted = false;
   String _selectedPaymentMethod = 'cash'; // 'cash' or 'wallet'
 
   @override
@@ -190,7 +192,8 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
                 activeOffers.isEmpty && _paymentCompleted
                     ? _buildAcceptedRideInfo(context, rideProvider)
                     : activeOffers.isEmpty &&
-                        currentRideRequest.status == 'accepted'
+                        currentRideRequest.status == 'accepted' &&
+                        _paymentCompleted // Only show accepted ride info after payment is completed
                     ? _buildAcceptedRideInfo(context, rideProvider)
                     : _buildDriverOffersList(
                       context,
@@ -199,8 +202,8 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
                     ),
           ),
 
-          // Counter offer section (shown only when drivers are selected)
-          if (_selectedDriverIds.isNotEmpty)
+          // Counter offer section (shown only when counter button is clicked)
+          if (_showCounterOfferInput && !_selectedDriverIds.isEmpty)
             _buildCounterOfferSection(context, rideProvider),
         ],
       ),
@@ -217,12 +220,16 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
     List<FareOffer> offers,
     RideProvider rideProvider,
   ) {
+    final currentRideRequest = rideProvider.currentRideRequest;
+    if (currentRideRequest == null) return Container();
+
     return ListView.builder(
       itemCount: offers.length,
       padding: const EdgeInsets.all(16),
       itemBuilder: (context, index) {
         final offer = offers[index];
         final driver = rideProvider.getDriverForOffer(offer.driverId);
+        final isSelected = _selectedDriverIds.contains(driver.id);
 
         return Container(
           margin: const EdgeInsets.only(bottom: 16),
@@ -237,17 +244,14 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
               ),
             ],
             border: Border.all(
-              color:
-                  _selectedDriverIds.contains(driver.id)
-                      ? AppTheme.primaryColor
-                      : Colors.transparent,
+              color: isSelected ? AppTheme.primaryColor : Colors.transparent,
               width: 2,
             ),
           ),
           child: InkWell(
             onTap: () {
               setState(() {
-                if (_selectedDriverIds.contains(driver.id)) {
+                if (isSelected) {
                   _selectedDriverIds.remove(driver.id);
                 } else {
                   _selectedDriverIds = [driver.id]; // Only select one at a time
@@ -357,6 +361,80 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
                       ),
                     ],
                   ),
+
+                  // Ride details section
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              currentRideRequest.rideType == 'shared'
+                                  ? Colors.green.withOpacity(0.1)
+                                  : Colors.deepPurpleAccent.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          currentRideRequest.rideType == 'shared'
+                              ? 'Shared Cab'
+                              : 'Private Cab',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color:
+                                currentRideRequest.rideType == 'shared'
+                                    ? Colors.green
+                                    : Colors.deepPurpleAccent,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      if (currentRideRequest.rideType == 'shared')
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '${currentRideRequest.seats} Seats',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          currentRideRequest.scheduledTime != null
+                              ? DateFormat(
+                                'dd MMM, h:mm a',
+                              ).format(currentRideRequest.scheduledTime!)
+                              : 'Now',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
                   if (offer.message != null) ...[
                     const SizedBox(height: 12),
                     Container(
@@ -372,74 +450,58 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () {
-                            setState(() {
-                              if (_selectedDriverIds.contains(driver.id)) {
-                                _selectedDriverIds.remove(driver.id);
-                              } else {
-                                _selectedDriverIds = [
-                                  driver.id,
-                                ]; // Only select one
-                              }
-                            });
-                          },
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(
-                              color:
-                                  _selectedDriverIds.contains(driver.id)
-                                      ? AppTheme.primaryColor
-                                      : Colors.grey,
+
+                  // Only show buttons when this driver is selected
+                  if (isSelected) ...[
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              _showCounterOfferSection(driver.id);
+                            },
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: AppTheme.primaryColor),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: Text(
-                            _selectedDriverIds.contains(driver.id)
-                                ? 'Selected'
-                                : 'Counter',
-                            style: TextStyle(
-                              color:
-                                  _selectedDriverIds.contains(driver.id)
-                                      ? AppTheme.primaryColor
-                                      : Colors.grey[700],
+                            child: const Text(
+                              'Counter',
+                              style: TextStyle(color: AppTheme.primaryColor),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            // Show payment sheet instead of immediately accepting
-                            setState(() {
-                              _showPaymentSheet = true;
-                              // Store the offer we're accepting
-                              rideProvider.acceptCounterOffer(
-                                offer.id,
-                                rideProvider.currentRideRequest!.id,
-                              );
-                            });
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryColor,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              // Show payment sheet instead of immediately accepting
+                              setState(() {
+                                _showPaymentSheet = true;
+                                // Store the offer we're accepting
+                                rideProvider.acceptCounterOffer(
+                                  offer.id,
+                                  currentRideRequest.id,
+                                );
+                              });
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryColor,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: const Text(
+                              'Accept',
+                              style: TextStyle(color: Colors.white),
                             ),
                           ),
-                          child: const Text(
-                            'Accept',
-                            style: TextStyle(color: Colors.white),
-                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -447,6 +509,14 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
         );
       },
     );
+  }
+
+  // New helper method to show counter offer section
+  void _showCounterOfferSection(String driverId) {
+    setState(() {
+      _selectedDriverIds = [driverId];
+      _showCounterOfferInput = true;
+    });
   }
 
   Widget _buildCounterOfferSection(
@@ -496,23 +566,29 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
                   _isLoading
                       ? null
                       : () {
-                        final String amountText = _counterOfferController.text;
+                        final String amountText =
+                            _counterOfferController.text.trim();
                         if (amountText.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Please enter an amount'),
-                              backgroundColor: Colors.red,
                             ),
                           );
                           return;
                         }
 
-                        final double amount = double.tryParse(amountText) ?? 0;
+                        double amount =
+                            double.tryParse(
+                              amountText
+                                  .replaceAll('₹', '')
+                                  .replaceAll(',', ''),
+                            ) ??
+                            0;
+
                         if (amount <= 0) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Please enter a valid amount'),
-                              backgroundColor: Colors.red,
                             ),
                           );
                           return;
@@ -522,36 +598,44 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
                           _isLoading = true;
                         });
 
-                        // Send counter offer to selected driver
                         try {
-                          rideProvider.createRiderCounterOffer(
-                            rideRequestId: rideProvider.currentRideRequest!.id,
-                            driverId: _selectedDriverIds.first,
-                            amount: amount,
-                            message: 'I can pay ₹${amount.toInt()}',
-                          );
+                          if (_selectedDriverIds.isNotEmpty) {
+                            final driverId = _selectedDriverIds.first;
+                            final rideRequestId =
+                                rideProvider.currentRideRequest!.id;
 
-                          _counterOfferController.clear();
-                          setState(() {
-                            _selectedDriverIds = [];
-                            _isLoading = false;
-                          });
+                            // Ensure we'll get a response by setting appropriate random seed
+                            rideProvider.createRiderCounterOffer(
+                              rideRequestId: rideRequestId,
+                              driverId: driverId,
+                              amount: amount,
+                              message: 'I can pay ₹${amount.toInt()}',
+                              ensureResponse:
+                                  true, // New parameter to ensure we get a response
+                            );
+
+                            // Hide the counter section after sending the offer
+                            setState(() {
+                              _counterOfferController.clear();
+                              _showCounterOfferInput = false;
+                            });
+                          }
                         } catch (e) {
-                          setState(() {
-                            _isLoading = false;
-                          });
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error: ${e.toString()}'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: ${e.toString()}')),
+                            );
+                          }
+                        } finally {
+                          if (mounted) {
+                            setState(() {
+                              _isLoading = false;
+                            });
+                          }
                         }
                       },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryColor,
-                padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -559,19 +643,16 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
               child:
                   _isLoading
                       ? const SizedBox(
-                        height: 20,
-                        width: 20,
+                        width: 24,
+                        height: 24,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
                           color: Colors.white,
+                          strokeWidth: 2,
                         ),
                       )
                       : const Text(
                         'Send Counter Offer',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(color: Colors.white),
                       ),
             ),
           ),
@@ -590,78 +671,104 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
     final acceptedOffer = offers.firstWhere((o) => o.id == acceptedOfferId);
     final driver = rideProvider.getDriverForOffer(acceptedOffer.driverId);
 
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.check_circle, color: Colors.green, size: 64),
-          const SizedBox(height: 16),
-          const Text(
-            'Ride Confirmed!',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Your ride with ${driver.name} has been confirmed',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16),
-          ),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(12),
+    return SingleChildScrollView(
+      child: Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
             ),
-            child: Column(
-              children: [
-                _infoRow('Driver', driver.name),
-                const SizedBox(height: 8),
-                _infoRow('Vehicle', '${driver.carModel} • ${driver.carColor}'),
-                const SizedBox(height: 8),
-                _infoRow('License Plate', driver.carNumber),
-                const SizedBox(height: 8),
-                _infoRow('Fare Amount', '₹${acceptedOffer.amount.toInt()}'),
-              ],
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green, size: 64),
+            const SizedBox(height: 16),
+            const Text(
+              'Ride Confirmed!',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
             ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pushReplacementNamed(context, AppRoutes.tracking);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+            const SizedBox(height: 8),
+            Text(
+              'Your ride with ${driver.name} has been confirmed',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  _infoRow('Driver', driver.name),
+                  const SizedBox(height: 8),
+                  _infoRow(
+                    'Vehicle',
+                    '${driver.carModel} • ${driver.carColor}',
+                  ),
+                  const SizedBox(height: 8),
+                  _infoRow('License Plate', driver.carNumber),
+                  const SizedBox(height: 8),
+                  _infoRow('Fare Amount', '₹${acceptedOffer.amount.toInt()}'),
+                  const SizedBox(height: 8),
+                  _infoRow(
+                    'Cab Type',
+                    currentRideRequest.rideType == 'shared'
+                        ? 'Shared Cab'
+                        : 'Private Cab',
+                  ),
+                  // Show seats only for shared rides
+                  if (currentRideRequest.rideType == 'shared') ...[
+                    const SizedBox(height: 8),
+                    _infoRow('Seats', '${currentRideRequest.seats}'),
+                  ],
+                  const SizedBox(height: 8),
+                  _infoRow(
+                    'Time',
+                    currentRideRequest.scheduledTime != null
+                        ? DateFormat(
+                          'dd MMM, h:mm a',
+                        ).format(currentRideRequest.scheduledTime!)
+                        : 'Now',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pushReplacementNamed(context, AppRoutes.tracking);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'Track Your Ride',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-              child: const Text(
-                'Track Your Ride',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -942,23 +1049,36 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: () => _processPayment(acceptedOffer, driver),
+              onPressed:
+                  _isLoading
+                      ? null
+                      : () => _processPayment(acceptedOffer, driver),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryColor,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(50),
                 ),
               ),
-              child: Text(
-                _selectedPaymentMethod == 'wallet'
-                    ? 'Pay with Wallet'
-                    : 'Pay with Cash',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
+              child:
+                  _isLoading
+                      ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                      : Text(
+                        _selectedPaymentMethod == 'wallet'
+                            ? 'Pay with Wallet'
+                            : 'Pay with Cash',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
             ),
           ),
         ],
@@ -966,9 +1086,13 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
     );
   }
 
-  void _processPayment(FareOffer acceptedOffer, DriverModel driver) {
+  void _processPayment(FareOffer acceptedOffer, DriverModel driver) async {
     final walletProvider = Provider.of<WalletProvider>(context, listen: false);
     final rideProvider = Provider.of<RideProvider>(context, listen: false);
+    final rideHistoryProvider = Provider.of<RideHistoryProvider>(
+      context,
+      listen: false,
+    );
 
     setState(() {
       _showPaymentSheet = false;
@@ -978,32 +1102,104 @@ class _FareNegotiationScreenState extends State<FareNegotiationScreen> {
       // Get ride price
       final price = acceptedOffer.amount.toInt();
 
-      // Try to deduct money from wallet
-      bool success = walletProvider.deductMoney(
-        price,
-        'Ride with ${driver.name}',
-      );
+      setState(() {
+        _isLoading = true;
+      });
 
-      if (success) {
-        // The ride is already accepted, just update the UI
-        setState(() {});
-      } else {
-        // Show low balance error
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Insufficient balance in wallet!'),
-            backgroundColor: Colors.red,
-          ),
+      try {
+        // Try to deduct money from wallet
+        bool success = await walletProvider.deductMoney(
+          price,
+          'Ride with ${driver.name}',
         );
 
-        // Reopen payment sheet to try again
-        setState(() {
-          _showPaymentSheet = true;
-        });
+        if (success) {
+          // The ride is already accepted, mark payment as completed
+          setState(() {
+            _paymentCompleted = true;
+            _isLoading = false;
+          });
+
+          // Add ride to history
+          await _saveRideToHistory(acceptedOffer, driver, 'wallet');
+        } else {
+          // Show low balance error
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Insufficient balance in wallet!'),
+              backgroundColor: Colors.red,
+            ),
+          );
+
+          // Reopen payment sheet to try again
+          setState(() {
+            _showPaymentSheet = true;
+            _isLoading = false;
+          });
+        }
+      } catch (e) {
+        // Show error message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Payment failed: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _showPaymentSheet = true;
+            _isLoading = false;
+          });
+        }
       }
     } else {
       // Cash payment doesn't need processing, just show accepted info
-      setState(() {});
+      setState(() {
+        _paymentCompleted = true;
+      });
+
+      // Add ride to history
+      await _saveRideToHistory(acceptedOffer, driver, 'cash');
+    }
+  }
+
+  // Save ride to history in Firebase
+  Future<void> _saveRideToHistory(
+    FareOffer acceptedOffer,
+    DriverModel driver,
+    String paymentMethod,
+  ) async {
+    try {
+      final rideProvider = Provider.of<RideProvider>(context, listen: false);
+      final rideHistoryProvider = Provider.of<RideHistoryProvider>(
+        context,
+        listen: false,
+      );
+
+      final currentRide = rideProvider.currentRideRequest;
+
+      if (currentRide != null) {
+        // Complete the ride in the ride provider
+        rideProvider.completeRide(currentRide.id);
+
+        // Add to ride history
+        await rideHistoryProvider.addRideToHistory(
+          rideRequest: currentRide,
+          driverName: driver.name,
+          fare: acceptedOffer.amount,
+          paymentMethod: paymentMethod,
+        );
+      }
+    } catch (e) {
+      print('Error saving ride history: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save ride history: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }

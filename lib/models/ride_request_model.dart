@@ -17,6 +17,7 @@ class RideRequest {
   final int seats;
   final List<String> counterOfferIds;
   final String? acceptedOfferId;
+  final String rideType; // 'shared' or 'private'
 
   RideRequest({
     required this.id,
@@ -36,6 +37,7 @@ class RideRequest {
     required this.seats,
     this.counterOfferIds = const [],
     this.acceptedOfferId,
+    this.rideType = 'shared', // Default to shared rides
   });
 
   // Convert to JSON
@@ -58,6 +60,7 @@ class RideRequest {
       'seats': seats,
       'counterOfferIds': counterOfferIds,
       'acceptedOfferId': acceptedOfferId,
+      'rideType': rideType,
     };
   }
 
@@ -88,6 +91,7 @@ class RideRequest {
       seats: json['seats'] ?? 1,
       counterOfferIds: List<String>.from(json['counterOfferIds'] ?? []),
       acceptedOfferId: json['acceptedOfferId'],
+      rideType: json['rideType'] ?? 'shared',
     );
   }
 
@@ -110,6 +114,7 @@ class RideRequest {
     int? seats,
     List<String>? counterOfferIds,
     String? acceptedOfferId,
+    String? rideType,
   }) {
     return RideRequest(
       id: id ?? this.id,
@@ -129,6 +134,7 @@ class RideRequest {
       seats: seats ?? this.seats,
       counterOfferIds: counterOfferIds ?? this.counterOfferIds,
       acceptedOfferId: acceptedOfferId ?? this.acceptedOfferId,
+      rideType: rideType ?? this.rideType,
     );
   }
 }
