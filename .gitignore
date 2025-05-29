@@ -46,6 +46,28 @@ app.*.map.json
 
 # Ignore .env file
 .env
+.env.local
+.env.production
+.env.development
+
+# Firebase configuration files - SENSITIVE DATA
+lib/firebase_options.dart
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+ios/firebase_app_id_file.json
+web/firebase-config.js
+
+# API Keys and Secrets
+*.key
+*.pem
+*.p12
+*.p8
+keystore.properties
+key.properties
+
+# Local configuration files
+local.properties
+gradle.properties
 
 # Ignore this folder
 Ryde figma/
